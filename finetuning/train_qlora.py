@@ -3,7 +3,7 @@
 Pensado para o Google Colab GRATUITO (GPU T4 16 GB, ~12 GB de RAM, sessao que pode cair):
   * modelo base em 4 bits (bitsandbytes) + treino so dos adaptadores LoRA (~1% dos parametros);
   * fp16 (a T4 nao tem bf16), gradient checkpointing, batch 4 x acumulacao 4;
-  * 1 epoca e sequencias de 768 tokens por padrao (~30-40 min na T4);
+  * 1 epoca e sequencias de 768 tokens por padrao (~18 min na T4, medido);
   * checkpoints a cada 50 steps + --resume: se o Colab desconectar, o treino continua de onde parou
     (salve --output-dir no Google Drive).
 

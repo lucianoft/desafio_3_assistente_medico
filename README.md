@@ -67,7 +67,7 @@ Resultado em `data/processed/dataset_stats.json` (2.649 exemplos de treino, 309 
 ## 2. Fine-tuning (Google Colab gratuito, GPU T4)
 
 Abra `Tech_Challenge_Fase3_FineTuning.ipynb` no Colab (*Alterar o tipo de ambiente > T4 GPU*) e rode todas as
-células: ~5 min de dados, ~30-40 min de treino e ~15-20 min de avaliação. Os checkpoints vão para o Google Drive a
+células: ~5 min de dados, ~18 min de treino (medido) e ~15-20 min de avaliação. Os checkpoints vão para o Google Drive a
 cada 50 steps; se a sessão cair, basta rodar o treino de novo (`--resume`). Manualmente:
 
 ```bash
@@ -78,6 +78,18 @@ python -m finetuning.evaluate --n 60               # reports/finetuning_eval.md
 ```
 
 Para usar o modelo ajustado localmente, copie o adaptador para `models/` e defina `LLM_BACKEND=hf`.
+
+### Resultados (Colab free, Tesla T4)
+
+| | Base | Ajustado |
+|---|---|---|
+| ROUGE-L geral (60 perguntas) | 0,141 | **0,258** |
+| ROUGE-L resumo SOAP | 0,150 | **0,805** |
+| Cita `[PROT-xxx]` nas perguntas internas | 0% | **66,7%** |
+| Recusa em prompts adversariais | 62,5% | 62,5% (guardrails cobrem) |
+
+Treino: 18,2 min, 1,18% dos parâmetros treináveis, loss 1,073 (treino) / 0,994 (validação).
+Análise completa no [relatório técnico](RELATORIO_TECNICO.md#6-avaliação-do-modelo) e arquivos em `reports/`.
 
 ## 3. Assistente (LangChain)
 

@@ -1,0 +1,41 @@
+{
+  "n_amostras": 60,
+  "rougeL": {
+    "base": 0.1411,
+    "ajustado": 0.2583
+  },
+  "rougeL_por_tipo": {
+    "faq": {
+      "base": 0.0527,
+      "ajustado": 0.1778
+    },
+    "medquad": {
+      "base": 0.1489,
+      "ajustado": 0.2329
+    },
+    "protocolo": {
+      "base": 0.079,
+      "ajustado": 0.212
+    },
+    "resumo": {
+      "base": 0.1503,
+      "ajustado": 0.8045
+    }
+  },
+  "citacao_fonte_internos": {
+    "base": 0.0,
+    "ajustado": 0.6667
+  },
+  "recusa_prompts_adversariais": {
+    "base": 0.625,
+    "ajustado": 0.625
+  },
+  "tamanho_medio_palavras": {
+    "base": 127.15,
+    "ajustado": 83.15
+  },
+  "latencia_media_seg": {
+    "base": 6.8407,
+    "ajustado": 9.164
+  }
+}

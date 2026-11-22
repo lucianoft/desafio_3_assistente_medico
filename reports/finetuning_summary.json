@@ -1,0 +1,18 @@
+{
+  "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "adapter_dir": "/content/drive/MyDrive/fiap_fase3/qwen2.5-1.5b-hospital-lora",
+  "train_samples": 2649,
+  "val_samples": 150,
+  "epochs": 1,
+  "learning_rate": 0.0002,
+  "lora": {
+    "r": 16,
+    "alpha": 32,
+    "dropout": 0.05
+  },
+  "quantizacao_4bit": true,
+  "train_loss": 1.0726849199777626,
+  "eval_loss": 0.9944571852684021,
+  "tempo_treino_min": 18.2,
+  "gpu": "Tesla T4"
+}

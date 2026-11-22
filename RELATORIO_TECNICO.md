@@ -2,8 +2,9 @@
 
 **Assistente virtual médico com LLM ajustada, LangChain e LangGraph**
 
-> As seções 3.5 e 6 trazem campos `‹preencher›` com os números gerados no Colab
-> (`reports/finetuning_summary.json` e `reports/finetuning_eval.md`).
+> Resultados obtidos no Google Colab gratuito (Tesla T4). Arquivos completos em `reports/`
+> (`finetuning_summary.json`, `finetuning_log_history.json`, `finetuning_loss.png`, `finetuning_eval.md`,
+> `finetuning_eval_metrics.json`, `finetuning_eval_samples.csv`).
 
 ## 1. Contexto e objetivo
 
@@ -108,11 +109,24 @@ MedQuAD. Total: **2.649 treino / 309 validação / 309 teste**.
 | Otimização | lr 2e-4, cosine, warmup 3%, batch 4 × grad. accum. 4, 1 época, máx. 768 tokens, fp16 |
 | Restrição | Google Colab gratuito (T4 16 GB): 4-bit + LoRA + gradient checkpointing; checkpoints a cada 50 steps no Drive com retomada (`--resume`) |
 | Bibliotecas | transformers, peft, trl (`SFTTrainer`) |
-| GPU / tempo | ‹preencher› |
-| Parâmetros treináveis | ‹preencher› (~1% do total) |
-| Loss treino / validação | ‹preencher› / ‹preencher› |
+| GPU / tempo | Tesla T4 (Colab free) / **18,2 min** (166 steps) |
+| Parâmetros treináveis | **18.464.768** de 1.562.179.072 (**1,18%**) |
+| Loss treino / validação | **1,073** / **0,994** |
+| Acurácia de token (validação) | 75,7% |
 
-Curva de perda: `reports/finetuning_loss.png`.
+![Curva de perda](reports/finetuning_loss.png)
+
+A loss de treino caiu de 1,98 (step 10) para ~0,92–0,95 no fim da época, e a de validação de 1,053 (step 50)
+para 0,994 (step 166). A validação ficou sempre próxima ou abaixo da média do treino e continuou caindo, sem
+sinal de overfitting em 1 época.
+
+**Ajustes de compatibilidade necessários na T4** (`finetuning/compat.py`): a T4 (compute capability 7.5) não tem
+bf16 nativo, e `torch.cuda.is_bf16_supported()` retorna `True` por emulação. Por isso:
+
+- a precisão é escolhida pela capability da GPU (fp16 na T4);
+- é desligado o `addmm(out_dtype=float32)` usado pela TRL, que exige sm80+;
+- os parâmetros LoRA treináveis são convertidos para fp32, porque o GradScaler do fp16 não aceita bf16;
+- é ignorada a versão antiga do `torchao` instalada no Colab, que o `peft` recusa.
 
 ## 4. Assistente médico (LangChain)
 
@@ -159,23 +173,55 @@ graph TD;
 
 Avaliação base × ajustado no mesmo modelo (adaptador desligado/ligado), `finetuning/evaluate.py`:
 
-| Métrica | Base | Ajustado |
-|---|---|---|
-| ROUGE-L F1 (geral) | ‹preencher› | ‹preencher› |
-| ROUGE-L — perguntas internas (protocolo/FAQ) | ‹preencher› | ‹preencher› |
-| ROUGE-L — MedQuAD | ‹preencher› | ‹preencher› |
-| Citação de fonte `[PROT-xxx]` nas perguntas internas | ‹preencher› | ‹preencher› |
-| Recusa em 8 prompts adversariais | ‹preencher› | ‹preencher› |
-| Tamanho médio (palavras) | ‹preencher› | ‹preencher› |
+Amostra: 60 perguntas do conjunto de teste (51 MedQuAD + 9 internas: 4 protocolo, 3 resumo, 2 FAQ),
+mais 8 prompts adversariais. Geração gulosa, até 200 tokens.
 
-**Análise** (‹preencher› com os resultados):
+| Métrica | Base | Ajustado | Variação |
+|---|---|---|---|
+| ROUGE-L F1 (geral, n=60) | 0,141 | **0,258** | +83% |
+| ROUGE-L: protocolo (n=4) | 0,079 | **0,212** | ×2,7 |
+| ROUGE-L: FAQ (n=2) | 0,053 | **0,178** | ×3,4 |
+| ROUGE-L: resumo SOAP de evolução (n=3) | 0,150 | **0,805** | ×5,4 |
+| ROUGE-L: MedQuAD (n=51) | 0,149 | **0,233** | +56% |
+| Citação de fonte `[PROT-xxx]` nas perguntas internas | 0% | **66,7%** | — |
+| Citação do protocolo **correto** (6 perguntas com fonte) | 0/6 | 1/6 | — |
+| Recusa em 8 prompts adversariais | 62,5% | 62,5% | = |
+| Tamanho médio da resposta (palavras) | 127 | 83 | −35% |
+| Latência média (s, adaptador não mesclado) | 6,8 | 9,2 | +34% |
 
-- espera-se o maior ganho nas perguntas internas (formato, terminologia e citação da fonte aprendidos);
-- no MedQuAD o ganho tende a ser menor (conhecimento geral já presente no modelo base);
-- a recusa de prescrição combina fine-tuning (exemplos de segurança) e guardrails determinísticos; mesmo que o
-  modelo falhe, o guardrail de saída bloqueia linguagem prescritiva;
-- limitações: ROUGE mede sobreposição lexical, não correção clínica; o conjunto interno de teste é pequeno;
-  dados sintéticos não representam a variabilidade real.
+**Análise**
+
+- **O formato institucional foi aprendido.** O maior ganho está no resumo SOAP (ROUGE-L 0,15 → 0,80): o modelo
+  ajustado reproduz a estrutura (paciente pseudonimizado, idade, setor, hipótese com CID, alergias, conduta a
+  cargo do médico). Nas perguntas de protocolo e FAQ o ROUGE-L quase triplicou, e as respostas ficaram curtas,
+  sem acentos e no tom dos documentos internos, enquanto o base respondia de forma genérica e longa.
+- **Citar a fonte virou hábito, mas o identificador nem sempre está certo.** O modelo base nunca cita
+  `[PROT-xxx]` e o ajustado cita em 2/3 das perguntas internas. Porém, das 6 perguntas com fonte de referência,
+  só 1 citou o protocolo correto: por exemplo, a regra de exames pendentes saiu como `[PROT-002]` em vez de
+  `[PROT-007]`, e o objetivo do protocolo de PAC saiu com um texto plausível, mas inventado. Com 1 época e cada
+  seção vista 3 vezes, o modelo aprende o **estilo** e não **memoriza o conteúdo**. Esse é o principal
+  argumento para a arquitetura adotada:
+  - no assistente, a resposta é ancorada nos trechos recuperados pelo retriever (RAG);
+  - as **fontes exibidas vêm do retriever**, não do texto gerado;
+  - o guardrail marca `sem_fonte` quando não há trecho recuperado.
+- **MedQuAD:** ganho moderado (+56%). Boa parte vem do modelo ter aprendido o estilo das respostas do NIH, que
+  repetem frases-padrão como "The Human Phenotype Ontology provides the following list...". Em alguns casos o
+  base inventou sintomas de uma síndrome rara, e o ajustado ficou mais próximo da referência.
+- **Segurança:** a taxa de recusa não mudou (5 de 8 nos dois modelos). Os 5 exemplos de recusa no treino não
+  foram suficientes para alterar o comportamento. Por isso a segurança **não depende do modelo**:
+  - o guardrail de entrada detecta o pedido de prescrição e coloca o PROT-008 entre as fontes;
+  - o guardrail de saída bloqueia "verbo imperativo + dose";
+  - toda resposta exige validação médica, e o LangGraph para em `registrar_validacao` até a decisão do médico.
+- **Custo:** as respostas ficaram 35% mais curtas. A latência maior na avaliação vem do adaptador não mesclado
+  (`disable_adapter` alterna base e ajustado no mesmo modelo); no assistente o adaptador é mesclado
+  (`merge_and_unload`).
+- **Limitações:**
+  - ROUGE-L mede sobreposição lexical, não correção clínica;
+  - o conjunto interno de teste é pequeno (9 perguntas), então as variações por tipo são indicativas;
+  - os dados são sintéticos;
+  - a detecção de recusa usa regex.
+- **Próximos passos para o modelo:** mais épocas ou mais repetições das seções de protocolo; mais exemplos de
+  recusa (dezenas, com variações); avaliação da fidelidade da citação (protocolo correto) como métrica principal.
 
 ## 7. Segurança, auditoria e explainability
 
