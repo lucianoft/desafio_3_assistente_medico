@@ -44,6 +44,7 @@ desafioFase3/
 ├── docs/fluxo_langgraph.mmd               # diagrama gerado do grafo
 ├── tests/                                 # pytest (21 testes, rodam sem GPU)
 ├── postman/                               # collection + environment para testar a API
+├── Dockerfile, docker-compose.yml         # API em container (backend fake/openai)
 └── RELATORIO_TECNICO.md
 ```
 
@@ -130,6 +131,39 @@ Logs em `logs/audit.jsonl`; alertas e validações também ficam no SQLite (`ale
 
 ## 6. Subir a aplicação (API)
 
+### 6.0 Com Docker (mais fácil: não precisa de Python instalado)
+
+Requer o [Docker Desktop](https://www.docker.com/products/docker-desktop/) aberto.
+
+```bash
+cd desafioFase3
+docker compose up --build -d           # constrói a imagem e sobe em segundo plano
+docker compose ps                      # STATUS deve ficar "healthy"
+```
+
+- API: http://localhost:8000. Swagger: http://localhost:8000/docs.
+- Já sobe com o backend `fake`, e a collection do Postman (seção 7.1) roda direto contra ela.
+- O banco e o log de auditoria ficam no volume `runtime`, então alertas e validações persistem entre reinícios.
+
+| Comando | Para quê |
+|---|---|
+| `docker compose logs -f` | acompanhar os logs (cada evento com `trace_id`) |
+| `docker compose exec api python app.py fluxo P001 --decisao aprovar --medico "Dra. Ana"` | rodar a CLI dentro do container |
+| `docker compose exec api tail -n 5 /runtime/logs/audit.jsonl` | ver o log de auditoria |
+| `docker compose down` | parar (mantém banco e logs) |
+| `docker compose down -v` | parar e apagar banco e logs (volta ao estado inicial) |
+
+Para usar OpenAI ou Groq no container, defina as variáveis antes de subir:
+
+```bash
+set LLM_BACKEND=openai                 # Linux/Mac: export LLM_BACKEND=openai
+set OPENAI_API_KEY=...
+docker compose up -d
+```
+
+A imagem é leve e roda só em CPU, por isso não inclui o backend `hf` (torch/transformers + GPU). Para usar o
+modelo ajustado, siga a seção 6.2.
+
 ### 6.1 Local, sem GPU (backend `fake`): para testar e para a demo
 
 ```bash
@@ -194,7 +228,7 @@ Arquivos em [`postman/`](postman):
 
 **Como usar**
 
-1. Suba a API (seção 6.1).
+1. Suba a API: `docker compose up --build -d` (seção 6.0) ou local (seção 6.1).
 2. No Postman, clique em **Import** e arraste os dois arquivos.
 3. Selecione o environment **Assistente Medico - Local**, no canto superior direito.
 4. Clique com o botão direito na collection, escolha **Run collection** e depois **Run**. Também dá para executar

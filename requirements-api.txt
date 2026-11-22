@@ -1,0 +1,9 @@
+# Somente o necessario para a API/CLI do assistente (usado no Dockerfile). Backends: fake e openai.
+langchain-core>=0.3
+langgraph>=0.2
+rank-bm25>=0.2.2
+pydantic>=2.0
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-dotenv>=1.0
+langchain-openai>=0.2

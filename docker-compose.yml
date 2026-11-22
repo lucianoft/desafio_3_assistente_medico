@@ -1,0 +1,22 @@
+# Sobe a API em http://localhost:8000 (Swagger em /docs).
+#   docker compose up --build          # sobe
+#   docker compose down                # para (mantem banco e logs no volume)
+#   docker compose down -v             # para e apaga banco/logs (volta ao estado inicial)
+services:
+  api:
+    build: .
+    image: assistente-medico-fase3
+    container_name: assistente-medico-fase3
+    ports:
+      - "8000:8000"
+    environment:
+      LLM_BACKEND: ${LLM_BACKEND:-fake}            # fake | openai
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}         # ex.: https://api.groq.com/openai/v1
+    volumes:
+      - runtime:/runtime                            # hospital.db + logs/audit.jsonl
+    restart: unless-stopped
+
+volumes:
+  runtime:
