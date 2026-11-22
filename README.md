@@ -43,6 +43,7 @@ desafioFase3/
 ├── reports/                               # métricas do fine-tuning (geradas no Colab)
 ├── docs/fluxo_langgraph.mmd               # diagrama gerado do grafo
 ├── tests/                                 # pytest (21 testes, rodam sem GPU)
+├── postman/                               # collection + environment para testar a API
 └── RELATORIO_TECNICO.md
 ```
 
@@ -127,11 +128,47 @@ python app.py auditoria <trace_id>     # todos os eventos: pergunta, fontes, res
 
 Logs em `logs/audit.jsonl`; alertas e validações também ficam no SQLite (`alertas`, `validacoes`).
 
-## 6. API
+## 6. Subir a aplicação (API)
+
+### 6.1 Local, sem GPU (backend `fake`): para testar e para a demo
 
 ```bash
-uvicorn api.main:app --reload          # http://localhost:8000/docs
+cd desafioFase3
+python -m venv .venv
+.venv\Scripts\activate                 # Linux/Mac: source .venv/bin/activate
+pip install -r requirements-dev.txt
+copy .env.example .env                 # Linux/Mac: cp .env.example .env   (LLM_BACKEND=fake)
+uvicorn api.main:app --reload --port 8000
 ```
+
+- Swagger (documentação interativa): http://localhost:8000/docs
+- Health: http://localhost:8000/health. O campo `modelo` mostra o backend em uso.
+- O banco (`data/synthetic/hospital.db`) e o dataset já vêm no repositório. Para recriá-los, rode `python app.py setup`.
+- Os fluxos gravam alertas e validações no banco. Para não alterar o banco versionado, aponte para uma cópia:
+  `set HOSPITAL_DB_PATH=C:\temp\hospital.db` (Linux/Mac: `export HOSPITAL_DB_PATH=/tmp/hospital.db`).
+
+### 6.2 Com a LLM ajustada (backend `hf`)
+
+1. Baixe o adaptador treinado do Google Drive (`MyDrive/fiap_fase3/qwen2.5-1.5b-hospital-lora`, sem as pastas
+   `checkpoint-*`) para `models/qwen2.5-1.5b-hospital-lora/`.
+2. Instale a pilha de inferência: `pip install -r requirements-train.txt`.
+3. No `.env`, defina `LLM_BACKEND=hf` (e `ADAPTER_PATH`, se o adaptador estiver em outra pasta).
+4. Suba com `uvicorn api.main:app --port 8000`, sem `--reload`, para não carregar o modelo duas vezes.
+
+Com GPU, cada resposta leva alguns segundos. Em CPU funciona, mas fica lento: dezenas de segundos por resposta.
+Na primeira execução o modelo base (~3 GB) é baixado do Hugging Face.
+
+### 6.3 Com OpenAI ou Groq (backend `openai`), para comparação
+
+```bash
+# .env
+LLM_BACKEND=openai
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4o-mini
+# OPENAI_BASE_URL=https://api.groq.com/openai/v1   (Groq; use um modelo do Groq em OPENAI_MODEL)
+```
+
+### 6.4 Rotas
 
 | Método | Rota | Descrição |
 |---|---|---|
@@ -143,7 +180,46 @@ uvicorn api.main:app --reload          # http://localhost:8000/docs
 | GET | `/auditoria/{trace_id}` | eventos de auditoria |
 | GET | `/pacientes/{id}/alertas` | alertas emitidos |
 
+O estado dos fluxos do LangGraph fica em memória no processo da API (`MemorySaver`). Se o uvicorn reiniciar, por
+exemplo pelo `--reload` ao salvar um arquivo, os fluxos abertos se perdem e é preciso iniciá-los de novo.
+
 ## 7. Testes
+
+### 7.1 Postman
+
+Arquivos em [`postman/`](postman):
+
+- `Assistente_Medico_Fase3.postman_collection.json`: 18 requisições com 59 testes automáticos;
+- `Local.postman_environment.json`: `baseUrl = http://localhost:8000`.
+
+**Como usar**
+
+1. Suba a API (seção 6.1).
+2. No Postman, clique em **Import** e arraste os dois arquivos.
+3. Selecione o environment **Assistente Medico - Local**, no canto superior direito.
+4. Clique com o botão direito na collection, escolha **Run collection** e depois **Run**. Também dá para executar
+   cada requisição em ordem; os `trace_id` são guardados automaticamente em variáveis (`askTraceId`, `flowTraceId`,
+   `flowTraceId2`).
+
+**O que a collection cobre**
+
+| Pasta | Requisições | O que verifica |
+|---|---|---|
+| Health | `GET /health` | backend em uso e limites de atuação |
+| 1. Assistente (LangChain) | pergunta com paciente (P001), pergunta geral, pedido de prescrição (P004), injeção de prompt, CPF na pergunta, auditoria, validação 422 | fontes corretas (PROT-001, PROT-007, PROT-008), uso do prontuário, guardrails `pedido_prescricao` / `tentativa_burlar_regras` / `pii_mascarada_na_entrada`, aviso de validação médica, CPF ausente da resposta e do log |
+| 2. Fluxo LangGraph - aprovação | iniciar P001 → estado → médico aprova → auditoria → alertas | pausa em `registrar_validacao` (human-in-the-loop), alerta de lactato crítico, `SUGESTAO_APROVADA`, eventos de auditoria |
+| 3. Fluxo LangGraph - rejeição e erros | iniciar P005 → médico rejeita → decidir de novo → paciente/fluxo inexistente | alerta `EXAME_ATRASADO`, `SUGESTAO_REJEITADA`, 409 e 404 |
+
+Os testes foram escritos para `LLM_BACKEND=fake`, que é determinístico. Com `hf` ou `openai` o texto da resposta
+muda, mas fontes, guardrails de entrada e o fluxo continuam iguais.
+
+Pela linha de comando, com o [newman](https://www.npmjs.com/package/newman):
+
+```bash
+npx newman run postman/Assistente_Medico_Fase3.postman_collection.json -e postman/Local.postman_environment.json
+```
+
+### 7.2 Pytest
 
 ```bash
 pytest                                 # usa LLM_BACKEND=fake, banco e logs temporários
