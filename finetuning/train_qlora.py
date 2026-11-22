@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 from core.config import settings
-from finetuning.compat import dtype_kwarg, supported_kwargs
+from finetuning.compat import dtype_kwarg, gpu_supports_bf16, patch_trl_for_old_gpus, supported_kwargs
 
 
 def parse_args(argv=None):
@@ -64,7 +64,8 @@ def main(argv=None) -> None:
 
     use_cuda = torch.cuda.is_available()
     use_4bit = use_cuda and not args.no_4bit
-    bf16 = use_cuda and torch.cuda.is_bf16_supported()
+    bf16 = gpu_supports_bf16()  # T4 (sm75) -> fp16
+    patch_trl_for_old_gpus()
     dtype = torch.bfloat16 if bf16 else torch.float16 if use_cuda else torch.float32
 
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)

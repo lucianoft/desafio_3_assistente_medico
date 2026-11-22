@@ -28,3 +28,29 @@ def supported_kwargs(cls, kwargs: dict) -> dict:
     if dropped:
         print(f"[compat] argumentos ignorados por {cls.__name__}: {dropped}")
     return {k: v for k, v in kw.items() if k in params}
+
+
+def gpu_supports_bf16() -> bool:
+    """bf16 nativo so a partir de compute capability 8.0 (Ampere). A T4 do Colab free e 7.5.
+
+    `torch.cuda.is_bf16_supported()` pode retornar True na T4 (emulacao), o que quebra o treino.
+    """
+    import torch
+
+    return torch.cuda.is_available() and torch.cuda.get_device_capability(0) >= (8, 0)
+
+
+def patch_trl_for_old_gpus() -> None:
+    """TRL recente usa `torch.addmm(..., out_dtype=float32)` com entradas fp16/bf16 na perda (chunked_logprob),
+    o que so funciona em GPUs com compute capability >= 8.0. Na T4 desliga esse atalho (usa o caminho em fp32)."""
+    import torch
+
+    if not torch.cuda.is_available() or torch.cuda.get_device_capability(0) >= (8, 0):
+        return
+    try:
+        import trl.kernels.chunked_logprob as ck
+    except ImportError:  # versoes antigas da TRL nao tem o kernel
+        return
+    if getattr(ck, "_MM_OUT_DTYPE", False):
+        ck._MM_OUT_DTYPE = False
+        print("[compat] GPU < sm80: desligado addmm(out_dtype=float32) da TRL")
