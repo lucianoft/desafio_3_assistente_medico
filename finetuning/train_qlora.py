@@ -19,7 +19,8 @@ import time
 from pathlib import Path
 
 from core.config import settings
-from finetuning.compat import dtype_kwarg, gpu_supports_bf16, patch_trl_for_old_gpus, supported_kwargs
+from finetuning.compat import (dtype_kwarg, gpu_supports_bf16, patch_trl_for_old_gpus, supported_kwargs,
+                               trainable_params_to_fp32)
 
 
 def parse_args(argv=None):
@@ -98,6 +99,8 @@ def main(argv=None) -> None:
         processing_class=tokenizer))
     trainer = SFTTrainer(**trainer_kwargs)
     trainer.model.print_trainable_parameters()
+    if use_cuda and not bf16:
+        trainable_params_to_fp32(trainer.model)  # GradScaler (fp16) exige gradientes fp32
 
     start = time.time()
     from transformers.trainer_utils import get_last_checkpoint

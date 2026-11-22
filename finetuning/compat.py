@@ -54,3 +54,19 @@ def patch_trl_for_old_gpus() -> None:
     if getattr(ck, "_MM_OUT_DTYPE", False):
         ck._MM_OUT_DTYPE = False
         print("[compat] GPU < sm80: desligado addmm(out_dtype=float32) da TRL")
+
+
+def trainable_params_to_fp32(model) -> None:
+    """Com fp16 (T4) o GradScaler so aceita gradientes fp32. Dependendo da versao de peft/TRL, os adaptadores
+    LoRA saem no dtype original do modelo (bf16 no Qwen2.5) -> NotImplementedError em
+    _amp_foreach_non_finite_check_and_unscale_cuda. Converte so os parametros treinaveis (~1%) para fp32."""
+    import torch
+    from collections import Counter
+
+    before = Counter()
+    for p in model.parameters():
+        if p.requires_grad:
+            before[str(p.dtype)] += 1
+            if p.dtype != torch.float32:
+                p.data = p.data.float()
+    print(f"[compat] parametros treinaveis convertidos para fp32 (antes: {dict(before)})")
