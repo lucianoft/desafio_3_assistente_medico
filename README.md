@@ -28,7 +28,7 @@ desafioFase3/
 │   ├── train_qlora.py                     # QLoRA (PEFT + TRL), salva adaptador + curva de loss
 │   └── evaluate.py                        # base x ajustado: ROUGE-L, citação de fonte, recusa, BERTScore
 ├── assistant/
-│   ├── llm.py                             # backends: hf (LoRA) | openai/groq | fake (sem GPU)
+│   ├── llm.py                             # backends: hf (LoRA) | groq | openai | fake (sem GPU)
 │   ├── retriever.py                       # busca BM25 híbrida (tema + seção) nos protocolos
 │   ├── patient_repository.py              # prontuário/exames/alertas (dados mínimos, sem PII)
 │   ├── prompts.py, tools.py               # prompts e @tools LangChain
@@ -44,7 +44,7 @@ desafioFase3/
 ├── docs/fluxo_langgraph.mmd               # diagrama gerado do grafo
 ├── tests/                                 # pytest (21 testes, rodam sem GPU)
 ├── postman/                               # collection + environment para testar a API
-├── Dockerfile, docker-compose.yml         # API em container (backend fake/openai)
+├── Dockerfile, docker-compose.yml         # API em container (backend fake/openai/groq)
 └── RELATORIO_TECNICO.md
 ```
 
@@ -153,13 +153,16 @@ docker compose ps                      # STATUS deve ficar "healthy"
 | `docker compose down` | parar (mantém banco e logs) |
 | `docker compose down -v` | parar e apagar banco e logs (volta ao estado inicial) |
 
-Para usar OpenAI ou Groq no container, defina as variáveis antes de subir:
+Para usar **Groq** ou **OpenAI** no container, o compose lê o arquivo `.env` da pasta do projeto:
 
 ```bash
-set LLM_BACKEND=openai                 # Linux/Mac: export LLM_BACKEND=openai
-set OPENAI_API_KEY=...
-docker compose up -d
+copy .env.example .env                 # Linux/Mac: cp .env.example .env
+# edite o .env: LLM_BACKEND=groq e GROQ_API_KEY=gsk_...   (ou LLM_BACKEND=openai e OPENAI_API_KEY=sk-...)
+docker compose up -d                   # recria o container com as novas variáveis
+curl http://localhost:8000/health      # "modelo": "groq:openai/gpt-oss-120b"
 ```
+
+Todas as variáveis estão na seção [Backends da LLM](#backends-da-llm).
 
 A imagem é leve e roda só em CPU, por isso não inclui o backend `hf` (torch/transformers + GPU). Para usar o
 modelo ajustado, siga a seção 6.2.
@@ -192,15 +195,31 @@ uvicorn api.main:app --reload --port 8000
 Com GPU, cada resposta leva alguns segundos. Em CPU funciona, mas fica lento: dezenas de segundos por resposta.
 Na primeira execução o modelo base (~3 GB) é baixado do Hugging Face.
 
-### 6.3 Com OpenAI ou Groq (backend `openai`), para comparação
+### 6.3 Com Groq ou OpenAI (backends `groq` / `openai`)
+
+Mesmo pipeline (RAG, prontuário, guardrails, LangGraph), trocando só a LLM. Serve para comparar com o modelo
+ajustado ou para a demo sem GPU com um modelo grande. Edite o `.env`:
 
 ```bash
-# .env
+# Groq (tem plano gratuito): chave em https://console.groq.com/keys
+LLM_BACKEND=groq
+GROQ_API_KEY=gsk_...
+
+# ou OpenAI
 LLM_BACKEND=openai
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-4o-mini
-# OPENAI_BASE_URL=https://api.groq.com/openai/v1   (Groq; use um modelo do Groq em OPENAI_MODEL)
+OPENAI_API_KEY=sk-...
 ```
+
+Depois suba a API normalmente (`uvicorn api.main:app --port 8000` ou `docker compose up -d`) e confira o campo
+`modelo` em `/health`. Também funciona na CLI: `python app.py perguntar "..." --paciente P001`.
+
+- **Chave ausente:** a primeira pergunta retorna o erro `LLM_BACKEND=groq exige a variavel GROQ_API_KEY`.
+- **Modelo descontinuado:** os modelos do Groq mudam com o tempo. Se der erro de modelo inexistente, escolha
+  outro em https://console.groq.com/docs/models e ajuste `GROQ_MODEL`.
+- **Resposta vazia ou cortada com modelos de raciocínio** (gpt-oss): aumente `GROQ_MAX_TOKENS` ou use
+  `GROQ_REASONING_EFFORT=low`.
+- **Segurança:** os dados enviados ao provedor externo são só os mínimos e pseudonimizados (código, idade, sexo,
+  diagnóstico, alergias, exames), sem nome, CPF ou contato. Os guardrails e a auditoria valem para qualquer backend.
 
 ### 6.4 Rotas
 
@@ -244,8 +263,9 @@ Arquivos em [`postman/`](postman):
 | 2. Fluxo LangGraph - aprovação | iniciar P001 → estado → médico aprova → auditoria → alertas | pausa em `registrar_validacao` (human-in-the-loop), alerta de lactato crítico, `SUGESTAO_APROVADA`, eventos de auditoria |
 | 3. Fluxo LangGraph - rejeição e erros | iniciar P005 → médico rejeita → decidir de novo → paciente/fluxo inexistente | alerta `EXAME_ATRASADO`, `SUGESTAO_REJEITADA`, 409 e 404 |
 
-Os testes foram escritos para `LLM_BACKEND=fake`, que é determinístico. Com `hf` ou `openai` o texto da resposta
-muda, mas fontes, guardrails de entrada e o fluxo continuam iguais.
+Os testes foram escritos para `LLM_BACKEND=fake`, que é determinístico. Com `hf`, `openai` ou `groq` o texto da
+resposta muda, mas fontes, guardrails de entrada e o fluxo continuam iguais. A resposta pode vir com
+`bloqueada: true` se o modelo escrever uma dose: é o guardrail de saída agindo.
 
 Pela linha de comando, com o [newman](https://www.npmjs.com/package/newman):
 
@@ -261,11 +281,35 @@ pytest                                 # usa LLM_BACKEND=fake, banco e logs temp
 
 ## Backends da LLM
 
-| `LLM_BACKEND` | Uso |
-|---|---|
-| `hf` | Qwen2.5-1.5B + adaptador LoRA treinado (GPU recomendada) |
-| `openai` | OpenAI ou Groq (`OPENAI_BASE_URL`) — comparação |
-| `fake` | determinístico, monta a resposta com os trechos recuperados; roda testes/demo sem GPU |
+| `LLM_BACKEND` | Uso | Precisa de |
+|---|---|---|
+| `fake` (padrão) | determinístico, monta a resposta com os trechos recuperados; testes e demo | nada |
+| `hf` | Qwen2.5-1.5B + adaptador LoRA treinado (o modelo do fine-tuning) | `requirements-train.txt`, adaptador em `models/`; GPU recomendada |
+| `groq` | modelos abertos grandes no Groq, para comparação | `GROQ_API_KEY` |
+| `openai` | OpenAI ou outro endpoint compatível, para comparação | `OPENAI_API_KEY` |
+
+Variáveis de ambiente, definidas no `.env` (modelo em `.env.example`) ou no ambiente. O `docker compose` lê o
+mesmo `.env`.
+
+| Variável | Padrão | Backend | Descrição |
+|---|---|---|---|
+| `LLM_BACKEND` | `fake` | todos | `fake`, `hf`, `groq` ou `openai` |
+| `LLM_TEMPERATURE` | `0` | groq, openai | temperatura da geração |
+| `BASE_MODEL` | `Qwen/Qwen2.5-1.5B-Instruct` | hf | modelo base |
+| `ADAPTER_PATH` | `models/qwen2.5-1.5b-hospital-lora` | hf | pasta do adaptador LoRA |
+| `MAX_NEW_TOKENS` | `384` | hf | tamanho máximo da resposta |
+| `GROQ_API_KEY` | — | groq | chave da API ([console.groq.com/keys](https://console.groq.com/keys)) |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | groq | modelo ([lista](https://console.groq.com/docs/models)) |
+| `GROQ_MAX_TOKENS` | `1024` | groq | tamanho máximo da resposta; nos gpt-oss inclui o raciocínio |
+| `GROQ_REASONING_EFFORT` | vazio | groq | `low`, `medium` ou `high`; só para modelos de raciocínio |
+| `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | groq | endpoint |
+| `OPENAI_API_KEY` | — | openai | chave da API |
+| `OPENAI_MODEL` | `gpt-4o-mini` | openai | modelo |
+| `OPENAI_MAX_TOKENS` | `1024` | openai | tamanho máximo da resposta |
+| `OPENAI_BASE_URL` | vazio (api.openai.com) | openai | outro endpoint compatível com a API da OpenAI |
+| `HOSPITAL_DB_PATH` | `data/synthetic/hospital.db` | todos | banco SQLite (no Docker: `/runtime/hospital.db`) |
+| `LOGS_DIR` | `logs` | todos | pasta do `audit.jsonl` (no Docker: `/runtime/logs`) |
+| `API_PORT` | `8000` | docker compose | porta publicada no host |
 
 ## Dataset
 

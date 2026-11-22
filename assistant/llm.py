@@ -2,7 +2,8 @@
 
 Backends (variavel LLM_BACKEND):
   * hf     -> modelo base + adaptador LoRA treinado (transformers + peft), via langchain-huggingface;
-  * openai -> API OpenAI ou compativel (OPENAI_BASE_URL, ex.: Groq) - util para comparacao;
+  * openai -> API OpenAI ou compativel (OPENAI_BASE_URL) - util para comparacao;
+  * groq   -> Groq (GROQ_API_KEY, GROQ_MODEL) - modelos abertos grandes, rapidos e com plano gratuito;
   * fake   -> modelo deterministico local que monta a resposta a partir do contexto recuperado.
               Permite rodar fluxos, testes e a API sem GPU (o pipeline LangChain/LangGraph e o mesmo).
 """
@@ -82,10 +83,31 @@ def _build_hf() -> BaseChatModel:
     return ChatHuggingFace(llm=HuggingFacePipeline(pipeline=gen, model_id=base), tokenizer=tok)
 
 
-def _build_openai() -> BaseChatModel:
+def _openai_compatible(model: str, base_url: str | None, key_env: str, max_tokens: int, key_help: str,
+                       reasoning_effort: str | None = None) -> BaseChatModel:
+    """OpenAI e Groq usam o mesmo cliente (API compativel); muda endpoint, chave e modelo."""
+    import os
+
     from langchain_openai import ChatOpenAI
 
-    return ChatOpenAI(model=settings.openai_model, temperature=0, base_url=settings.openai_base_url)
+    key = os.getenv(key_env)
+    if not key:
+        raise RuntimeError(f"LLM_BACKEND={settings.llm_backend} exige a variavel {key_env} ({key_help})")
+    kwargs: dict[str, Any] = {}
+    if reasoning_effort:
+        kwargs["reasoning_effort"] = reasoning_effort
+    return ChatOpenAI(model=model, base_url=base_url, api_key=key, temperature=settings.llm_temperature,
+                      max_tokens=max_tokens, max_retries=2, timeout=60, **kwargs)
+
+
+def _build_openai() -> BaseChatModel:
+    return _openai_compatible(settings.openai_model, settings.openai_base_url, "OPENAI_API_KEY",
+                              settings.openai_max_tokens, "https://platform.openai.com/api-keys")
+
+
+def _build_groq() -> BaseChatModel:
+    return _openai_compatible(settings.groq_model, settings.groq_base_url, "GROQ_API_KEY", settings.groq_max_tokens,
+                              "crie em https://console.groq.com/keys", settings.groq_reasoning_effort)
 
 
 @lru_cache(maxsize=1)
@@ -95,6 +117,8 @@ def get_chat_model(backend: str | None = None) -> BaseChatModel:
         return _build_hf()
     if backend == "openai":
         return _build_openai()
+    if backend == "groq":
+        return _build_groq()
     if backend == "fake":
         return FakeClinicalChatModel()
     raise ValueError(f"LLM_BACKEND invalido: {backend}")
@@ -105,5 +129,7 @@ def model_description(backend: str | None = None) -> str:
     if backend == "hf":
         return f"{settings.base_model} + LoRA ({settings.adapter_path.name})"
     if backend == "openai":
-        return settings.openai_model
+        return f"openai:{settings.openai_model}"
+    if backend == "groq":
+        return f"groq:{settings.groq_model}"
     return "fake-clinical (deterministico)"

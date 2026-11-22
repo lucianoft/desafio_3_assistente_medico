@@ -1,19 +1,32 @@
 # Sobe a API em http://localhost:8000 (Swagger em /docs).
-#   docker compose up --build          # sobe
+#   docker compose up --build -d       # sobe
 #   docker compose down                # para (mantem banco e logs no volume)
 #   docker compose down -v             # para e apaga banco/logs (volta ao estado inicial)
+#
+# Backend da LLM: o compose le as variaveis do arquivo .env desta pasta (copie de .env.example).
+#   LLM_BACKEND=fake  (padrao, sem chave)  |  openai (OPENAI_API_KEY)  |  groq (GROQ_API_KEY)
+# Depois de mudar o .env: docker compose up -d   (recria o container com as novas variaveis)
 services:
   api:
     build: .
     image: assistente-medico-fase3
     container_name: assistente-medico-fase3
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     environment:
-      LLM_BACKEND: ${LLM_BACKEND:-fake}            # fake | openai
+      LLM_BACKEND: ${LLM_BACKEND:-fake}             # fake | openai | groq   (hf nao esta na imagem)
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0}
+      # OpenAI
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}         # ex.: https://api.groq.com/openai/v1
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-1024}
+      # Groq
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
+      GROQ_MAX_TOKENS: ${GROQ_MAX_TOKENS:-1024}
+      GROQ_REASONING_EFFORT: ${GROQ_REASONING_EFFORT:-}
     volumes:
       - runtime:/runtime                            # hospital.db + logs/audit.jsonl
     restart: unless-stopped
