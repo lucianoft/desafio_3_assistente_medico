@@ -8,7 +8,9 @@
 
 ## 1. Contexto e objetivo
 
-Depois da automação da análise de exames (Fase 1) e de textos clínicos (Fase 2), o hospital quer um assistente
+Depois da predição de câncer de mama com ML (Fase 1,
+[repositório](https://github.com/lucianoft/machine_learning_cancer_mama)) e da otimização por algoritmo genético com
+explicações via LLM (Fase 2, [repositório](https://github.com/lucianoft/machine_learning_cancer_mama_v2)), o hospital quer um assistente
 treinado com os seus próprios dados, que:
 
 - responda dúvidas de médicos com base nos **protocolos internos**;

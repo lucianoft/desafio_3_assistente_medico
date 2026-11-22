@@ -10,7 +10,12 @@ Assistente virtual médico do **Hospital Escola Fiap (fictício)**:
 - **Segurança**: nunca prescreve/define dose/dá alta, logs de auditoria por `trace_id`, citação de fonte em
   toda resposta.
 
-Continuação das fases anteriores ([`desafio/`](../desafio) e [`desafioFase2/`](../desafioFase2)).
+Continuação das fases anteriores:
+
+- **Fase 1:** predição benigno × maligno (Breast Cancer Wisconsin) com ML e API em Docker,
+  em [machine_learning_cancer_mama](https://github.com/lucianoft/machine_learning_cancer_mama).
+- **Fase 2:** hiperparâmetros otimizados por algoritmo genético, explicações em linguagem natural via LLM e
+  observabilidade, em [machine_learning_cancer_mama_v2](https://github.com/lucianoft/machine_learning_cancer_mama_v2).
 
 ## Estrutura
 
