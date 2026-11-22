@@ -86,6 +86,9 @@ def main(argv=None) -> None:
 
     model = AutoModelForCausalLM.from_pretrained(args.base_model, **dtype_kwarg(dtype),
                                                  device_map="auto" if torch.cuda.is_available() else None)
+    from finetuning.compat import patch_peft_torchao
+
+    patch_peft_torchao()  # torchao antigo do Colab
     model = PeftModel.from_pretrained(model, args.adapter)
     model.eval()
 

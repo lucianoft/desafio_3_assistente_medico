@@ -71,6 +71,10 @@ def _build_hf() -> BaseChatModel:
     if (adapter / "adapter_config.json").exists():
         from peft import PeftModel
 
+        from finetuning.compat import patch_peft_torchao
+
+        patch_peft_torchao()  # torchao antigo do Colab
+
         model = PeftModel.from_pretrained(model, str(adapter))
         model = model.merge_and_unload()  # inferencia mais rapida
     gen = pipeline("text-generation", model=model, tokenizer=tok, max_new_tokens=settings.max_new_tokens,

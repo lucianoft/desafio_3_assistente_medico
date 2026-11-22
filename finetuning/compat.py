@@ -70,3 +70,29 @@ def trainable_params_to_fp32(model) -> None:
             if p.dtype != torch.float32:
                 p.data = p.data.float()
     print(f"[compat] parametros treinaveis convertidos para fp32 (antes: {dict(before)})")
+
+
+def patch_peft_torchao() -> None:
+    """O Colab traz torchao antigo (0.10) e o peft recente levanta ImportError ao carregar um adaptador num
+    modelo nao quantizado ("Found an incompatible version of torchao"). O projeto nao usa torchao: trata
+    versao incompativel como "nao instalado"."""
+    import importlib
+    import sys
+
+    def _safe(orig):
+        def wrapper(*a, **k):
+            try:
+                return orig(*a, **k)
+            except ImportError:
+                return False
+        wrapper._fase3_safe = True
+        return wrapper
+
+    for name in ("peft.import_utils", "peft.tuners.lora.torchao", "peft.utils.quantization_utils"):
+        try:
+            mod = sys.modules.get(name) or importlib.import_module(name)
+        except Exception:
+            continue
+        fn = getattr(mod, "is_torchao_available", None)
+        if fn is not None and not getattr(fn, "_fase3_safe", False):
+            mod.is_torchao_available = _safe(fn)
