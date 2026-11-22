@@ -1,0 +1,39 @@
+{
+  "anonimizacao": {
+    "NOME": 30,
+    "CPF": 30,
+    "TELEFONE": 30,
+    "DATA": 30
+  },
+  "internos_unicos": 101,
+  "medquad": {
+    "total_bruto": 16407,
+    "duplicada": 2058,
+    "resposta_curta": 12,
+    "selecionadas": 3000,
+    "qtypes": 16
+  },
+  "train_total": 2649,
+  "train_por_tipo": {
+    "medquad": 2400,
+    "protocolo": 99,
+    "resumo": 72,
+    "modelo": 15,
+    "faq": 48,
+    "seguranca": 15
+  },
+  "val_total": 309,
+  "val_por_tipo": {
+    "medquad": 300,
+    "resumo": 3,
+    "faq": 2,
+    "protocolo": 4
+  },
+  "test_total": 309,
+  "test_por_tipo": {
+    "medquad": 300,
+    "faq": 2,
+    "protocolo": 4,
+    "resumo": 3
+  }
+}

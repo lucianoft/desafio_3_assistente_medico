@@ -1,0 +1,12 @@
+# Fine-tuning e inferencia com a LLM ajustada (GPU - ex.: Google Colab T4)
+-r requirements.txt
+# torch: ja vem instalado no Colab (local: pip install torch)
+transformers>=4.46
+peft>=0.13
+trl>=0.12
+bitsandbytes>=0.43
+accelerate>=0.34
+rouge-score>=0.1.2
+bert-score>=0.3.13
+matplotlib>=3.7
+langchain-huggingface>=0.1

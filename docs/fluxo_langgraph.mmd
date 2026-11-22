@@ -1,0 +1,28 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	carregar_paciente(carregar_paciente)
+	verificar_exames(verificar_exames)
+	buscar_protocolos(buscar_protocolos)
+	sugerir_conduta(sugerir_conduta)
+	validar_seguranca(validar_seguranca)
+	emitir_alertas(emitir_alertas)
+	registrar_validacao(registrar_validacao<hr/><small><em>__interrupt = before</em></small>)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> carregar_paciente;
+	buscar_protocolos --> sugerir_conduta;
+	carregar_paciente -. &nbsp;fim&nbsp; .-> __end__;
+	carregar_paciente -. &nbsp;seguir&nbsp; .-> verificar_exames;
+	emitir_alertas --> registrar_validacao;
+	sugerir_conduta --> validar_seguranca;
+	validar_seguranca -. &nbsp;alertar&nbsp; .-> emitir_alertas;
+	validar_seguranca -. &nbsp;validar&nbsp; .-> registrar_validacao;
+	verificar_exames --> buscar_protocolos;
+	registrar_validacao --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
